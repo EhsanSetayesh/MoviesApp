@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="GradleMigrationSettings" migrationVersion="1" />
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
@@ -9,6 +10,23 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/core" />
+            <option value="$PROJECT_DIR$/core/common" />
+            <option value="$PROJECT_DIR$/core/designsystem" />
+            <option value="$PROJECT_DIR$/core/designsystem/compose" />
+            <option value="$PROJECT_DIR$/core/designsystem/resource" />
+            <option value="$PROJECT_DIR$/core/featureflag" />
+            <option value="$PROJECT_DIR$/core/netwok" />
+            <option value="$PROJECT_DIR$/core/test" />
+            <option value="$PROJECT_DIR$/core/test/ui" />
+            <option value="$PROJECT_DIR$/core/test/unit" />
+            <option value="$PROJECT_DIR$/feature" />
+            <option value="$PROJECT_DIR$/feature/moviedetails" />
+            <option value="$PROJECT_DIR$/feature/movieslist" />
+            <option value="$PROJECT_DIR$/feature/navigation" />
+            <option value="$PROJECT_DIR$/shared" />
+            <option value="$PROJECT_DIR$/shared/movies" />
+            <option value="$PROJECT_DIR$/shared/movies/common" />
           </set>
         </option>
         <option name="resolveExternalAnnotations" value="false" />
