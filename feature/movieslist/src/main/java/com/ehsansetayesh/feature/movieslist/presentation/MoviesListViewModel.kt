@@ -42,6 +42,14 @@ class MoviesListViewModel @Inject constructor(
         MoviesListUiState.Loading
     )
 
+    // Keep track of basket items
+    private val _basketItems = MutableStateFlow<Set<String>>(emptySet())
+    val basketItems = _basketItems.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptySet()
+    )
+
     val basketCount = getBasketSizeUseCase()
         .stateIn(
             viewModelScope,
@@ -53,7 +61,32 @@ class MoviesListViewModel @Inject constructor(
 
     init {
         loadMovies()
+        observeBasketChanges()
     }
+
+    private fun observeBasketChanges() {
+        viewModelScope.launch {
+            basketCount.collect {
+                // When basket count changes, refresh basket items
+                refreshBasketItems()
+            }
+        }
+    }
+
+    private fun refreshBasketItems() {
+        viewModelScope.launch(ioDispatcher) {
+            val currentState = _uiState.value
+            if (currentState is MoviesListUiState.Success) {
+                try {
+                    val basketItems = loadBasketItems(currentState.movies)
+                    _basketItems.value = basketItems
+                } catch (e: Exception) {
+                    emitViewEvent(ViewEvent.ShowError("Failed to refresh basket states"))
+                }
+            }
+        }
+    }
+
 
     fun handleEvent(event: MoviesListUiEvent) {
         when (event) {
@@ -61,19 +94,7 @@ class MoviesListViewModel @Inject constructor(
             is MoviesListUiEvent.AddToBasket -> addToBasket(event.movie)
             is MoviesListUiEvent.RemoveFromBasket -> removeFromBasket(event.movieId)
             MoviesListUiEvent.RetryClicked -> loadMovies()
-            MoviesListUiEvent.RefreshBasketState -> refreshBasketState()
-        }
-    }
-
-    private fun refreshBasketState() {
-        viewModelScope.launch(ioDispatcher) {
-            val currentState = _uiState.value
-            if (currentState is MoviesListUiState.Success && currentState.movies.isNotEmpty()) {
-                val updatedBasketStates = loadBasketStates(currentState.movies)
-                _uiState.value = currentState.copy(
-                    movieBasketStates = updatedBasketStates
-                )
-            }
+            MoviesListUiEvent.RefreshBasketState -> refreshBasketItems()
         }
     }
 
@@ -102,11 +123,12 @@ class MoviesListViewModel @Inject constructor(
                         )
                     }
                     moviesResult is Value && featureFlagResult is Value -> {
-                        val basketStates = loadBasketStates(moviesResult.value)
+                        val basketItems = loadBasketItems(moviesResult.value)
+                        _basketItems.value = basketItems
+
                         _uiState.value = MoviesListUiState.Success(
                             movies = moviesResult.value,
-                            isBasketButtonVisible = featureFlagResult.value,
-                            movieBasketStates = basketStates
+                            isBasketButtonVisible = featureFlagResult.value
                         )
                     }
                 }
@@ -118,23 +140,25 @@ class MoviesListViewModel @Inject constructor(
         }
     }
 
-    private suspend fun loadBasketStates(movies: List<Movie>): Map<String, Boolean> {
+    private suspend fun loadBasketItems(movies: List<Movie>): Set<String> {
         return coroutineScope {
             movies.map { movie ->
                 async {
-                    movie.id to when (val result = isMovieInBasketUseCase(movie.id)) {
-                        is Value -> result.value
-                        is Error -> false
+                    when (val result = isMovieInBasketUseCase(movie.id)) {
+                        is Value -> if (result.value) movie.id else null
+                        is Error -> null
                     }
                 }
-            }.awaitAll().toMap()
+            }.awaitAll().filterNotNull().toSet()
         }
     }
 
     private fun addToBasket(movie: Movie) {
         viewModelScope.launch(ioDispatcher) {
             when (val result = addMovieToBasketUseCase(movie)) {
-                is Value -> updateMovieBasketState(movie.id, true)
+                is Value -> {
+                    _basketItems.value += movie.id
+                }
                 is Error -> emitViewEvent(
                     ViewEvent.ShowError(result.error.message ?: "Failed to add to basket")
                 )
@@ -145,19 +169,14 @@ class MoviesListViewModel @Inject constructor(
     private fun removeFromBasket(movieId: String) {
         viewModelScope.launch(ioDispatcher) {
             when (val result = removeMovieFromBasketUseCase(movieId)) {
-                is Value -> updateMovieBasketState(movieId, false)
+                is Value -> {
+                    _basketItems.value -= movieId
+                }
                 is Error -> emitViewEvent(
                     ViewEvent.ShowError(result.error.message ?: "Failed to remove from basket")
                 )
             }
         }
-    }
-
-    private fun updateMovieBasketState(movieId: String, isInBasket: Boolean) {
-        val currentState = _uiState.value as? MoviesListUiState.Success ?: return
-        _uiState.value = currentState.copy(
-            movieBasketStates = currentState.movieBasketStates + (movieId to isInBasket)
-        )
     }
 
     private fun emitViewEvent(event: ViewEvent) {
@@ -177,7 +196,6 @@ sealed interface MoviesListUiState {
     data class Success(
         val movies: List<Movie>,
         val isBasketButtonVisible: Boolean,
-        val movieBasketStates: Map<String, Boolean>
     ) : MoviesListUiState
     data class Error(val message: String) : MoviesListUiState
 }

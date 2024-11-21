@@ -33,10 +33,6 @@ fun MoviesListScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val basketCount by viewModel.basketCount.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
-        viewModel.handleEvent(MoviesListUiEvent.RefreshBasketState)
-    }
-
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -61,7 +57,6 @@ fun MoviesListScreen(
                 MoviesList(
                     movies = state.movies,
                     isBasketButtonVisible = state.isBasketButtonVisible,
-                    movieBasketStates = state.movieBasketStates,
                     onMovieClick = onNavigateToDetails,
                     onBasketClick = { movie, isInBasket ->
                         if (isInBasket) {
@@ -70,7 +65,8 @@ fun MoviesListScreen(
                             viewModel.handleEvent(MoviesListUiEvent.AddToBasket(movie))
                         }
                     },
-                    modifier = Modifier.padding(paddingValues)
+                    modifier = Modifier.padding(paddingValues),
+                    viewModel
                 )
             }
             is MoviesListUiState.Error -> {
@@ -90,11 +86,16 @@ fun MoviesListScreen(
 private fun MoviesList(
     movies: List<Movie>,
     isBasketButtonVisible: Boolean,
-    movieBasketStates: Map<String, Boolean>,
     onMovieClick: (String) -> Unit,
     onBasketClick: (Movie, Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: MoviesListViewModel
+
 ) {
+
+    val basketItems by viewModel.basketItems.collectAsStateWithLifecycle()
+
+
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(16.dp),
@@ -107,7 +108,7 @@ private fun MoviesList(
             MovieItem(
                 movie = movie,
                 isBasketButtonVisible = isBasketButtonVisible,
-                initialIsInBasket = movieBasketStates[movie.id] ?: false,
+                isInBasket = basketItems.contains(movie.id),
                 onMovieClick = { onMovieClick(movie.id) },
                 onBasketClick = { isInBasket -> onBasketClick(movie, isInBasket) }
             )
@@ -119,13 +120,11 @@ private fun MoviesList(
 private fun MovieItem(
     movie: Movie,
     isBasketButtonVisible: Boolean,
-    initialIsInBasket: Boolean,
+    isInBasket: Boolean,
     onMovieClick: () -> Unit,
     onBasketClick: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-
-    var isInBasket by remember(movie.id) { mutableStateOf(initialIsInBasket) }
 
     Card(
         modifier = modifier
@@ -170,10 +169,7 @@ private fun MovieItem(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
-                    onClick = {
-                        onBasketClick(isInBasket)
-                        isInBasket = !isInBasket
-                    },
+                    onClick = { onBasketClick(isInBasket) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
